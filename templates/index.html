@@ -3,30 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photo Capture</title>
+    <title>Webcam Capture</title>
 </head>
 <body>
-    <h1>Capture Photo</h1>
-    <form id="captureForm">
-        <button type="button" onclick="capturePhoto()">Capture Photo</button>
-    </form>
-    <div id="result"></div>
+    <h1>Webcam Capture</h1>
+    <video id="webcam" autoplay playsinline width="640" height="480"></video>
+    <canvas id="snapshot" width="640" height="480" style="display: none;"></canvas>
+    <button id="captureBtn">Capture</button>
+    <p id="status"></p>
 
     <script>
-        function capturePhoto() {
-            fetch('/capture', { method: 'POST' })
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('snapshot');
+        const context = canvas.getContext('2d');
+        const captureBtn = document.getElementById('captureBtn');
+        const status = document.getElementById('status');
+
+        // Access the user's webcam
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(err => {
+                console.error("Error accessing webcam:", err);
+                status.textContent = "Error accessing webcam.";
+            });
+
+        // Capture the current frame and send it to the server
+        captureBtn.addEventListener('click', () => {
+            // Draw the current frame from the video to the canvas
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Convert the canvas to a Blob
+            canvas.toBlob(blob => {
+                const formData = new FormData();
+                formData.append('image', blob, 'frame.jpg');
+
+                // Send the Blob to the Flask server
+                fetch('/capture', {
+                    method: 'POST',
+                    body: formData
+                })
                 .then(response => response.json())
                 .then(data => {
-                    const resultDiv = document.getElementById('result');
-                    resultDiv.innerHTML = `
-                        <h2>Photo Captured</h2>
-                        <img src="/static/uploads/${data.filename}" alt="Captured Photo">
-                        <br>
-                        <a href="/display/${data.filename}">View Photo</a>
-                    `;
+                    if (data.filename) {
+                        status.innerHTML = `Image saved! <a href="/display/${data.filename}">View image</a>`;
+                    } else {
+                        status.textContent = "Error saving image.";
+                    }
                 })
-                .catch(error => alert('Error capturing photo: ' + error));
-        }
+                .catch(err => {
+                    console.error("Error sending image:", err);
+                    status.textContent = "Error sending image.";
+                });
+            }, 'image/jpeg');
+        });
     </script>
 </body>
 </html>
